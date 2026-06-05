@@ -30,6 +30,11 @@ import type { Goal } from "./goal.js";
 import type { Project, ProjectWorkspace } from "./project.js";
 import type { ExecutionWorkspace, IssueExecutionWorkspaceSettings } from "./workspace-runtime.js";
 import type { IssueWorkProduct } from "./work-product.js";
+import type {
+  LowTrustReviewPresetPolicy,
+  SourceTrustMetadata,
+  TrustAuthorizationPolicy,
+} from "../trust-policy.js";
 
 export type { IssueWorkMode };
 
@@ -99,6 +104,7 @@ export interface IssueDocumentSummary {
   lockedAt: Date | null;
   lockedByAgentId: string | null;
   lockedByUserId: string | null;
+  sourceTrust?: SourceTrustMetadata | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -127,6 +133,71 @@ export interface LegacyPlanDocument {
   key: "plan";
   body: string;
   source: "issue_description";
+}
+
+export type AcceptedPlanDecompositionStatus = "in_flight" | "completed";
+
+export interface AcceptedPlanDecompositionChild {
+  projectId?: string | null;
+  projectWorkspaceId?: string | null;
+  goalId?: string | null;
+  blockedByIssueIds?: string[];
+  title: string;
+  description?: string | null;
+  status: IssueStatus;
+  workMode: IssueWorkMode;
+  priority: IssuePriority;
+  assigneeAgentId?: string | null;
+  assigneeUserId?: string | null;
+  requestDepth?: number;
+  billingCode?: string | null;
+  assigneeAdapterOverrides?: IssueAssigneeAdapterOverrides | null;
+  executionPolicy?: IssueExecutionPolicy | null;
+  executionWorkspaceId?: string | null;
+  executionWorkspacePreference?: string | null;
+  executionWorkspaceSettings?: IssueExecutionWorkspaceSettings | null;
+  labelIds?: string[];
+  acceptanceCriteria?: string[];
+  blockParentUntilDone?: boolean;
+}
+
+export interface AcceptedPlanDecomposition {
+  id: string;
+  companyId: string;
+  sourceIssueId: string;
+  acceptedPlanRevisionId: string;
+  acceptedInteractionId: string | null;
+  status: AcceptedPlanDecompositionStatus;
+  requestFingerprint: string;
+  requestedChildCount: number;
+  childIssueIds: string[];
+  ownerAgentId: string | null;
+  ownerUserId: string | null;
+  ownerRunId: string | null;
+  completedAt: Date | string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface AcceptedPlanDecompositionResult {
+  decomposition: AcceptedPlanDecomposition;
+  childIssueIds: string[];
+  newlyCreatedChildIssueIds: string[];
+}
+
+export interface AcceptedPlanDecompositionChildIssue {
+  id: string;
+  identifier: string | null;
+  title: string;
+  status: IssueStatus;
+  priority: IssuePriority;
+  assigneeAgentId: string | null;
+  assigneeUserId: string | null;
+}
+
+export interface AcceptedPlanDecompositionSummary extends AcceptedPlanDecomposition {
+  acceptedPlanRevisionNumber: number | null;
+  childIssues: AcceptedPlanDecompositionChildIssue[];
 }
 
 export interface IssueRelationIssueSummary {
@@ -376,6 +447,8 @@ export interface IssueExecutionPolicy {
   commentRequired: boolean;
   stages: IssueExecutionStage[];
   monitor?: IssueExecutionMonitorPolicy | null;
+  reviewPreset?: LowTrustReviewPresetPolicy;
+  authorizationPolicy?: TrustAuthorizationPolicy;
 }
 
 export interface IssueExecutionMonitorState {
@@ -472,6 +545,7 @@ export interface Issue {
   completedAt: Date | null;
   cancelledAt: Date | null;
   hiddenAt: Date | null;
+  sourceTrust?: SourceTrustMetadata | null;
   labelIds?: string[];
   labels?: IssueLabel[];
   blockedBy?: IssueRelationIssueSummary[];
@@ -514,6 +588,12 @@ export interface IssueComment {
   body: string;
   presentation: IssueCommentPresentation | null;
   metadata: IssueCommentMetadata | null;
+  deletedAt?: Date | null;
+  deletedByType?: "agent" | "user" | null;
+  deletedByAgentId?: string | null;
+  deletedByUserId?: string | null;
+  deletedByRunId?: string | null;
+  sourceTrust?: SourceTrustMetadata | null;
   followUpRequested?: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -657,6 +737,7 @@ export interface AskUserQuestionsPayload {
 export interface AskUserQuestionsAnswer {
   questionId: string;
   optionIds: string[];
+  otherText?: string | null;
 }
 
 export interface AskUserQuestionsResult {
@@ -780,4 +861,6 @@ export interface IssueAttachment {
   createdAt: Date;
   updatedAt: Date;
   contentPath: string;
+  openPath?: string;
+  downloadPath?: string;
 }

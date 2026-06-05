@@ -27,6 +27,7 @@ import {
   MODEL_PROFILE_KEYS,
 } from "../constants.js";
 import { multilineTextSchema } from "./text.js";
+import { lowTrustReviewPresetPolicySchema, trustAuthorizationPolicySchema } from "./trust-policy.js";
 
 export const issueBlockedInboxStateSchema = z.enum([
   "needs_attention",
@@ -116,14 +117,14 @@ export const issueExecutionWorkspaceSettingsSchema = z
     mode: z.enum(ISSUE_EXECUTION_WORKSPACE_PREFERENCES).optional(),
     environmentId: z.string().uuid().optional().nullable(),
     workspaceStrategy: executionWorkspaceStrategySchema.optional().nullable(),
-    workspaceRuntime: z.record(z.unknown()).optional().nullable(),
+    workspaceRuntime: z.record(z.string(), z.unknown()).optional().nullable(),
   })
   .strict();
 
 export const issueAssigneeAdapterOverridesSchema = z
   .object({
     modelProfile: z.enum(MODEL_PROFILE_KEYS).optional(),
-    adapterConfig: z.record(z.unknown()).optional(),
+    adapterConfig: z.record(z.string(), z.unknown()).optional(),
     useProjectWorkspace: z.boolean().optional(),
   })
   .strict();
@@ -197,6 +198,8 @@ export const issueExecutionPolicySchema = z.object({
   commentRequired: z.boolean().optional().default(true),
   stages: z.array(issueExecutionStageSchema).default([]),
   monitor: issueExecutionMonitorPolicySchema.optional().nullable(),
+  reviewPreset: lowTrustReviewPresetPolicySchema.optional(),
+  authorizationPolicy: trustAuthorizationPolicySchema.optional(),
 });
 
 export const issueExecutionMonitorStateSchema = z.object({
@@ -248,10 +251,10 @@ export const issueRecoveryActionReadModelSchema = z.object({
   returnOwnerAgentId: z.string().uuid().nullable(),
   cause: z.string().min(1),
   fingerprint: z.string().min(1),
-  evidence: z.record(z.unknown()),
+  evidence: z.record(z.string(), z.unknown()),
   nextAction: z.string().min(1),
-  wakePolicy: z.record(z.unknown()).nullable(),
-  monitorPolicy: z.record(z.unknown()).nullable(),
+  wakePolicy: z.record(z.string(), z.unknown()).nullable(),
+  monitorPolicy: z.record(z.string(), z.unknown()).nullable(),
   attemptCount: z.number().int().nonnegative(),
   maxAttempts: z.number().int().positive().nullable(),
   timeoutAt: z.union([z.date(), z.string().datetime()]).nullable(),
@@ -275,14 +278,18 @@ const RESOLVE_ISSUE_RECOVERY_ACTION_OUTCOMES = [
 export const resolveIssueRecoveryActionSchema = z.object({
   actionId: z.string().uuid().optional(),
   outcome: z.enum(RESOLVE_ISSUE_RECOVERY_ACTION_OUTCOMES),
-  sourceIssueStatus: z.enum(["done", "in_review", "blocked"]),
+  sourceIssueStatus: z.enum(["todo", "done", "in_review", "blocked"]),
   resolutionNote: multilineTextSchema.optional().nullable(),
 }).strict().superRefine((value, ctx) => {
   if (value.outcome === "restored") {
-    if (value.sourceIssueStatus !== "done" && value.sourceIssueStatus !== "in_review") {
+    if (
+      value.sourceIssueStatus !== "todo" &&
+      value.sourceIssueStatus !== "done" &&
+      value.sourceIssueStatus !== "in_review"
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Restored recovery actions must move the source issue to done or in_review",
+        message: "Restored recovery actions must move the source issue to todo, done, or in_review",
         path: ["sourceIssueStatus"],
       });
     }
@@ -407,6 +414,13 @@ export const createChildIssueSchema = withCreateIssueStatusDefault(createIssueBa
   }));
 
 export type CreateChildIssue = z.infer<typeof createChildIssueSchema>;
+
+export const createAcceptedPlanDecompositionSchema = z.object({
+  acceptedPlanRevisionId: z.string().uuid(),
+  children: z.array(createChildIssueSchema).min(1).max(25),
+});
+
+export type CreateAcceptedPlanDecomposition = z.infer<typeof createAcceptedPlanDecompositionSchema>;
 
 export const createIssueLabelSchema = z.object({
   name: z.string().trim().min(1).max(48),
@@ -655,6 +669,7 @@ export const askUserQuestionsPayloadSchema = z.object({
 export const askUserQuestionsAnswerSchema = z.object({
   questionId: z.string().trim().min(1).max(120),
   optionIds: z.array(z.string().trim().min(1).max(120)).max(20),
+  otherText: multilineTextSchema.pipe(z.string().trim().max(4000)).nullable().optional(),
 });
 
 export const askUserQuestionsResultSchema = z.object({
